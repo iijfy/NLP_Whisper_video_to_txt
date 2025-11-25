@@ -255,4 +255,4 @@ fixes = {
 ---
 
 ## 9. 결과물 확인
-✅ [결과물 바로가기](https://vimeo.com/1140345041?fl=tl&fe=ec)# NLP_Whisper_large_video_to_text
+✅ [결과물 바로가기](https://vimeo.com/1140345041?fl=tl&fe=ec)
