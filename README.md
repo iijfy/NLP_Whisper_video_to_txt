@@ -1,47 +1,28 @@
 ![예시 이미지](example.png)
 
-## 🧭 전체 3단계 파이프라인 개요
+## 🎬 AI 영상 컨텐츠 자동 자막 생성 파이프라인 프로젝트 3단계 로드맵
 
 ```mermaid
-flowchart LR
-    A[🎬 드라마 영상 입력 (mp4)] --> S1[1단계<br/>Whisper-large 기반 자막 생성]
-    S1 --> S1_OUT[1단계 산출물<br/>ko.srt, ko_sub.mp4]
+flowchart TB
+    V["드라마 MP4 영상"]
+    F1["ffmpeg<br/>오디오 추출<br/>(16kHz mono WAV)"]
+    W["Whisper-large ASR<br/>(HF pipeline,<br/>word-level timestamps)"]
 
-    S1 --> S2[2단계<br/>WhisperX 정밀 alignment<br/>+ 화자 분리(예정)]
-    S2 --> S2_OUT[2단계 산출물<br/>정밀 타임스탬프, 화자 태그]
+    G["자막 블럭 묶기<br/>(group_words_to_subtitles)"]
+    D["언어 판별<br/>contains_hangul / needs_translation"]
+    T["영어 블럭 NMT 번역<br/>opus-mt-en-ko"]
 
-    S2 --> S3[3단계<br/>전문 자막 편집툴로 수동 후반 작업(예정)]
-    S3 --> S3_OUT[최종 OTT 수준 자막<br/>(배포용 마스터)]
+    P["후처리<br/>postprocess_ko_text / refine_timing"]
+    S["SRT 파일 생성"]
+    O["하드서브 영상 출력<br/>(ffmpeg + 한나체)"]
+
+    V --> F1 --> W
+    W --> G --> D
+    D -->|"한국어"| P
+    D -->|"영어"| T --> P
+    P --> S --> O
 ```
-
----
-
-### 2️⃣ 1단계 내부 처리 플로우 다이어그램
-
-```md
-## 🔧 1단계 내부 처리 흐름 다이어그램
-
-```mermaid
-flowchart TD
-    V[🎬 입력 드라마 영상<br/>(mp4)]
-    V --> F1[ffmpeg<br/>오디오 추출<br/>(16kHz mono wav)]
-
-    F1 --> W[Whisper-large ASR<br/>return_timestamps="word"]
-    W --> G[group_words_to_subtitles<br/>단어 → 자막 블럭]
-
-    G --> T[needs_translation / translator<br/>영어 블럭만 번역 (en→ko)]
-    T --> P[postprocess_ko_text<br/>자주 틀리는 표현 치환]
-
-    P --> M[merge_subtitles_by_sentence<br/>문장 단위 병합]
-    M --> R[refine_timing<br/>전역 딜레이 + 간격 조정]
-
-    R --> S[save_srt<br/>SRT 파일 생성]
-    S --> F2[ffmpeg<br/>subtitles 필터 + force_style<br/>하드서브 렌더링]
-
-    F2 --> O[📼 출력 영상 + 자막<br/>(ko.srt, *_ko_sub.mp4)]
-```
-
-## 📚 AI 영상 컨텐츠 자동 자막 생성 파이프라인 프로젝트는 3단계로 확장하는 것을 목표로 합니다.
+## 📚 AI 영상 컨텐츠 자동 자막 생성 파이프라인 프로젝트 3단계 요약
 
 ### 1단계: 기본 Whisper-large 파이프라인
 
@@ -66,10 +47,39 @@ flowchart TD
   - 표현 자연스럽게 다듬기
   - 컷 전환/회상 장면 등에 맞춘 세밀한 연출
 - 최종적으로 OTT/극장 수준의 자막 퀄리티를 목표로 하는 단계
+<br><br>
 
+## 🔍 AI 기반 드라마 자동 자막 생성 파이프라인 1단계 로드맵
 
+```mermaid
+flowchart TB
+    %% Stage 1 · Whisper-large 기반 드라마 자동 자막 파이프라인
 
-# 🎬 AI 기반 드라마 자동 자막 생성 파이프라인 1단계
+    V["드라마 MP4 영상"]
+    F1["ffmpeg<br/>오디오 추출<br/>(16kHz mono WAV)"]
+    W["Whisper-large ASR<br/>(Hugging Face pipeline,<br/>word-level timestamps)"]
+
+    G["group_words_to_subtitles<br/>단어 → 자막 블럭 묶기<br/>(max_chars / max_duration / max_gap)"]
+
+    D["언어 판별<br/>contains_hangul / needs_translation"]
+
+    T["영어 블럭만 NMT 번역<br/>Helsinki-NLP/opus-mt-tc-big-en-ko"]
+
+    P1["postprocess_ko_text<br/>Whisper 오인식 보정"]
+    P2["refine_timing<br/>자막 시작·끝 시간 정리"]
+
+    S["SRT 자막 파일 생성<br/>sec_to_srt_time,<br/>wrap_subtitle_text"]
+    F2["ffmpeg 하드서브<br/>+ 배민 한나체 적용"]
+    O["최종 출력 영상<br/>(* _ko_sub.mp4)"]
+
+    V --> F1 --> W --> G --> D
+    D -->|한국어 포함| P1
+    D -->|영어만| T --> P1
+    P1 --> P2 --> S --> F2 --> O
+
+```
+
+# 🎬 AI 기반 드라마 자동 자막 생성 파이프라인 1단계 요약
 
 ## 1. 프로젝트 개요
 
