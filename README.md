@@ -3,24 +3,47 @@
 ## 🎬 AI 영상 컨텐츠 자동 자막 생성 파이프라인 프로젝트 3단계 로드맵
 
 ```mermaid
-flowchart TB
-    V["드라마 MP4 영상"]
-    F1["ffmpeg<br/>오디오 추출<br/>(16kHz mono WAV)"]
-    W["Whisper-large ASR<br/>(HF pipeline,<br/>word-level timestamps)"]
+flowchart LR
+    A["드라마 MP4 영상"]
 
-    G["자막 블럭 묶기<br/>(group_words_to_subtitles)"]
-    D["언어 판별<br/>contains_hangul / needs_translation"]
-    T["영어 블럭 NMT 번역<br/>opus-mt-en-ko"]
+    subgraph STAGE1["1단계 · Whisper-large 기반 자동 자막"]
+        direction TB
 
-    P["후처리<br/>postprocess_ko_text / refine_timing"]
-    S["SRT 파일 생성"]
-    O["하드서브 영상 출력<br/>(ffmpeg + 한나체)"]
+        V1["Whisper-large ASR<br/>(HF pipeline)"]
+        G1["자막 블럭 묶기<br/>(group_words_to_subtitles)"]
+        D1["언어 판별<br/>contains_hangul / needs_translation"]
+        T1["영어→한글 번역<br/>(opus-mt-en-ko)"]
+        P1["후처리<br/>postprocess_ko_text / refine_timing"]
+        S1["SRT 파일 생성"]
+        O1["하드서브 영상 출력<br/>(ffmpeg)"]
 
-    V --> F1 --> W
-    W --> G --> D
-    D -->|"한국어"| P
-    D -->|"영어"| T --> P
-    P --> S --> O
+        V1 --> G1 --> D1
+        D1 -->|"한국어"| P1
+        D1 -->|"영어"| T1 --> P1
+        P1 --> S1 --> O1
+    end
+
+    subgraph STAGE2["2단계 · WhisperX 정밀 alignment / 화자 정보"]
+        direction TB
+
+        XW["WhisperX ASR + alignment"]
+        XS["(옵션) 화자 분리<br/>speaker diarization"]
+        XU["WhisperX 출력 →<br/>1단계 자막 로직 재사용"]
+        XW --> XS --> XU
+    end
+
+    subgraph STAGE3["3단계 · 자막 에디터 수작업 보정"]
+        direction TB
+
+        E1["Subtitle Edit / Aegisub로 SRT 편집"]
+        E2["타이밍 미세 조정"]
+        E3["자연스러운 표현으로 수정"]
+        E1 --> E2 --> E3
+    end
+
+    A --> STAGE1
+    STAGE1 --> STAGE2
+    STAGE2 --> STAGE3
 ```
 ## 📚 AI 영상 컨텐츠 자동 자막 생성 파이프라인 프로젝트 3단계 요약
 
@@ -76,7 +99,6 @@ flowchart TB
     D -->|한국어 포함| P1
     D -->|영어만| T --> P1
     P1 --> P2 --> S --> F2 --> O
-
 ```
 
 # 🎬 AI 기반 드라마 자동 자막 생성 파이프라인 1단계 요약
