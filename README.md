@@ -331,3 +331,92 @@ fixes = {
 
 ## 9. 결과물 확인
 ✅ [결과물 바로가기](https://vimeo.com/1140345041?fl=tl&fe=ec)
+<br><br><br><br><br>
+
+
+## 🔍 AI 기반 드라마 자동 자막 생성 파이프라인 2단계 로드맵
+```mermaid
+flowchart TB
+    %% Stage 2 · WhisperX 기반 정밀 alignment + 화자 분리
+
+    A["드라마 MP4 영상"]
+    F1["ffmpeg<br/>오디오 추출<br/>(16kHz mono WAV)"]
+
+    subgraph WX["WhisperX ASR + Alignment"]
+        direction TB
+        XW["WhisperX ASR<br/>(large-v2)"]
+        XA["Forced alignment<br/>(load_align_model / align)"]
+        XW --> XA
+    end
+
+    subgraph SD["화자 분리 (Speaker Diarization)"]
+        direction TB
+        XD["DiarizationPipeline<br/>(pyannote 기반)"]
+        XS["단어별 화자 태깅<br/>(assign_word_speakers)"]
+        XD --> XS
+    end
+
+    WC["word_chunks 생성<br/>{text, (start,end), speaker}"]
+    R["1단계 자막 파이프라인 재사용<br/>group_words_to_subtitles → 번역 → 후처리 → SRT/하드서브"]
+
+    A --> F1
+    F1 --> XW
+    F1 --> XD
+    XA --> WC
+    XS --> WC
+    WC --> R
+```
+
+# 🎬 AI 기반 드라마 자동 자막 생성 파이프라인 2단계 요약<br>
+
+### 🟪 Whisper X 기반 alignment + 화자 정보 활용
+
+1단계에서는 Hugging Face `pipeline("automatic-speech-recognition")`을 사용해  
+Whisper-large의 word-level 타임스탬프를 기반으로 자막 블럭을 구성했다.  
+
+2단계에서는 **Whisper X**를 사용
+- WhisperX ASR + alignment로 **더 정교한 단어 단위 타임스탬프** 확보
+- speaker diarization을 적용해, 각 단어에 화자 정보(speaker id)를 부여
+- 1단계에서 구현한
+  - `group_words_to_subtitles` (단어 → 자막 블럭)
+  - `needs_translation` / `postprocess_ko_text` (언어 판별 + 후처리)
+  - `refine_timing` / `save_srt` / ffmpeg 하드서브
+  를 WhisperX 출력에 그대로 재사용
+<br>
+
+#### Whisper X 연동 핵심 코드
+
+```python
+import whisperx
+
+audio_path = "audio_16k_mono.wav"
+device = "cuda" if torch.cuda.is_available() else "cpu"
+compute_type = "float16" if torch.cuda.is_available() else "int8"
+
+# WhisperX ASR
+asr_model = whisperx.load_model("large-v2", device=device, compute_type=compute_type)
+audio = whisperx.load_audio(audio_path)
+asr_result = asr_model.transcribe(audio, batch_size=16)
+
+# Alignment
+lang_code = asr_result.get("language", "ko")
+align_model, metadata = whisperx.load_align_model(language_code=lang_code, device=device)
+aligned_result = whisperx.align(asr_result["segments"], align_model, metadata, audio, device)
+
+# WhisperX word-level 결과를 1단계 파이프라인에서 쓰던 형태로 변환
+word_chunks = []
+for seg in aligned_result["segments"]:
+    for w in seg.get("words", []):
+        text = (w.get("word") or "").strip()
+        start = w.get("start", None)
+        end = w.get("end", None)
+        if not text or start is None or end is None:
+            continue
+        word_chunks.append({"text": text, "timestamp": (float(start), float(end))})
+
+# 이하 코드는 1단계와 동일
+raw_subs = group_words_to_subtitles(word_chunks, ...)
+# → 번역(needs_translation / translator)
+# → postprocess_ko_text / refine_timing
+# → save_srt / ffmpeg 하드서브
+```
